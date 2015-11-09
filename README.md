@@ -1,2 +1,2 @@
-# rethinkdb-orm.nim
-RethinkDB ORM
+# rethinkdbengine.nim
+RethinkDB Object-relational Mapping for Nim

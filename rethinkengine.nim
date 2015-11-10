@@ -1,12 +1,14 @@
 import macros, typeinfo, typetraits, tables, asyncdispatch
-import ../../rethinkdb.nim/rethinkdb except `[]`
+import ../../rethinkdb.nim/rethinkdb
 
-import private/utils.nim
+include private/utils.nim
+import times
+
 
 type
   RethinkDocument* {.inheritable.} = object
-    data*: TableRef[string, MutableDatum]
-    isDirty: bool
+    id: string
+    isDirty*: bool
 
 macro document*(head: expr, body: stmt): stmt {.immediate.} =
   ## A new Rethink Engine document defination.
@@ -44,6 +46,10 @@ macro document*(head: expr, body: stmt): stmt {.immediate.} =
 
   result = newStmtList()
 
+  var
+    fieldList: seq[string] = @[]
+    #fieldType = @["string"]
+
   var recList = newNimNode(nnkRecList)
 
   for node in body.children:
@@ -58,6 +64,10 @@ macro document*(head: expr, body: stmt): stmt {.immediate.} =
       of nnkVarSection:
         # variables get turned into fields of the type.
         for n in node.children:
+
+          fieldList.add($n[0])
+          #fieldType.add($n[1])
+
           recList.add(n)
       else:
         result.add(node)
@@ -65,38 +75,34 @@ macro document*(head: expr, body: stmt): stmt {.immediate.} =
   result.insert(0,
     if baseName == nil:
       quote do:
-        type `docName` = ref object of RethinkDocument
+        type `docName` = object of RethinkDocument
     else:
       quote do:
-        type `docName` = ref object of `baseName`
+        type `docName` = object of `baseName`
   )
   result[0][0][0][2][2] = recList
 
-  echo result.treeRepr
+  var setterGetter = quote do:
+    method id*(self: `docName`): string = self.id
+    #proc `@id=`*(self: `docName`, id: string) = self.id = id
 
+  var getDataProc =  quote do:
+    method getData*(self: `docName`): MutableDatum =
+      &*{"id": self.id}
 
-proc save*[T](r: RethinkClient, doc: T) =
-  discard waitFor r.table(doc.tableName).insert([doc.data]).run(r)
+  # small hack: I dont know how to create a nnkSym node
+  var sym =  getDataProc[0][6][0][1][0][1][0]
+  for f in fieldList:
+    var e = newColonExpr(newStrLitNode(f), newDotExpr(sym, ident(f)))
+    getDataProc[0][6][0][1].add(e)
 
-type
-  Model* = ref object of RethinkDocument
+  var saveProc = quote do:
+    proc save*(r: RethinkClient, doc: `docName`) =
+      if not doc.isDirty:
+        return
+      discard waitFor r.table(name(`docName`)).insert([doc.getData]).run(r)
 
-proc newModel*(): Model =
-  new(result)
-  result.isDirty = false
-  result.data = newTable[string, MutableDatum]()
-
-
-method name(self: Model): string = %%self.data["name"]
-proc `name=`(self: Model, name: string) = self.data["name"] = name
-method age(self: Model): int = %%self.data["age"]
-proc `age=`(self: Model, age: int) = self.data["age"] = age
-
-method preSave(self: Model) =
-  echo self.data.name
-
-
-var m = newModel()
-m.id = "123"
-m.name = "Lisa"
-echo m[]
+  result.add(setterGetter)
+  result.add(getDataProc)
+  result.add(saveProc)
+  #echo result.treeRepr

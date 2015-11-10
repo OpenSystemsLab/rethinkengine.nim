@@ -7,18 +7,18 @@ import asyncdispatch
 import times
 import typeinfo
 import typetraits
-type
-  Version* = object of RethinkDocument
-    version*: string
-    updatedAt: TimeInfo
-  Software* = object of RethinkDocument
-    name*: string
-    description*: string
-    homepage*: string
-    tags*: seq[string]
-    version*: string
-    lastCheckedAt*: TimeInfo
-    versions: seq[Version]
+
+document Version:
+  var version: string
+  var updatedAt: TimeInfo
+
+document Software:
+  var name: string
+  var description: string
+  var homepage: string
+  var tags: seq[string]
+  var version: string
+  var lastCheckedAt: TimeInfo
 
 
 #var r = newRethinkClient()

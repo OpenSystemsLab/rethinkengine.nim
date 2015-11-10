@@ -1,5 +1,3 @@
-import typeinfo, tables, rethinkdb
-
 proc `&`*(a: Any): MutableDatum =
   case a.kind
   of akBool:

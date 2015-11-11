@@ -61,7 +61,6 @@ macro document*(head: expr, body: stmt): stmt {.immediate.} =
     fieldList: seq[string] = @[]
     fieldName, fieldType: NimNode
     newFieldName, setter: NimNode
-    #fieldType = @["string"]
 
   var recList = newNimNode(nnkRecList)
   var setterGetterProcs = newStmtList()
@@ -103,16 +102,16 @@ macro document*(head: expr, body: stmt): stmt {.immediate.} =
   result.insert(0,
     if baseName == nil:
       quote do:
-        type `docName` = ref object of RethinkDocument
+        type `docName` = object of RethinkDocument
     else:
       quote do:
-        type `docName` = ref object of `baseName`
+        type `docName` = object of `baseName`
   )
-  result[0][0][0][2][0][2] = recList
+  result[0][0][0][2][2] = recList
 
   var getDataProc =  quote do:
     proc getData*(self: `docName`): MutableDatum =
-      &*{"id": self.mId}
+      &*{"id": self.id}
 
   # small hack: I dont know how to create a nnkSym node
   var sym =  getDataProc[0][6][0][1][0][1][0]
@@ -124,13 +123,6 @@ macro document*(head: expr, body: stmt): stmt {.immediate.} =
 
   var newproc = ident("new" & capitalize($docName))
   var saveProc = quote do:
-    proc `newproc`*(): `docName` =
-      var doc: `docName`
-      new(doc)
-      doc.isDirty = false
-
-      doc
-
     proc save*(doc: `docName`) =
       if not doc.isDirty:
         return
@@ -138,7 +130,7 @@ macro document*(head: expr, body: stmt): stmt {.immediate.} =
       waitFor r.connect()
       echo(%doc.getData())
       #discard waitFor r.table(name(`docName`)).insert([doc.getData()]).run(r)
-  echo getDataProc.treeRepr
+  #echo getDataProc.treeRepr
   result.add(setterGetterProcs)
   result.add(getDataProc)
   result.add(saveProc)

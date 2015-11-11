@@ -8,6 +8,9 @@ import times
 import typeinfo
 import typetraits
 
+type
+  Tags {.borrow: `.`.} = seq[string]
+
 document Version:
   var version: string
   var updatedAt: TimeInfo
@@ -16,36 +19,25 @@ document Software:
   var name: string
   var description: string
   var homepage: string
-  var tags: seq[string]
+  var tags: Tags
   var version: string
   var lastCheckedAt: TimeInfo
 
 
-#var r = newRethinkClient()
-#waitFor r.connect()
+open()
 
-var soft: Software
-var v: Version
+var
+  soft: Software
+  v: Version
+
+new(soft)
+new(v)
+
 v.version = "0.0.1"
 
 soft.id = "nginx"
 soft.name = "nginx"
-soft.versions = @[]
-soft.versions.add(v)
-
-
-var t: TimeInfo
-
-echo name(type(t))
-
-echo (%(&(toAny(soft))))
-
-for name, value in toAny(soft).fields():
-  echo name, ", ", value.kind
-  if not value.isNil:
-    echo value.repr
-
-
-#r.save(soft)
+#soft.tags.add("linux")
+soft.save()
 
 #r.close()

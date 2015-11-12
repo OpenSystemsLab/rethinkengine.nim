@@ -61,9 +61,11 @@ macro document*(head: expr, body: stmt): stmt {.immediate.} =
     fieldList: seq[string] = @[]
     fieldName, fieldType: NimNode
     newFieldName, setter: NimNode
+    isArray: bool
 
   var recList = newNimNode(nnkRecList)
   var setterGetterProcs = newStmtList()
+
 
   for node in body.children:
     case node.kind:
@@ -80,6 +82,13 @@ macro document*(head: expr, body: stmt): stmt {.immediate.} =
           fieldName = n[0]
           fieldType = n[1]
 
+          if n[1].kind == nnkBracketExpr:
+            if n[1][0] != ident("seq"):
+              raise newException(ValueError, "only seq is support as array")
+            isArray = true
+          else:
+            isArray = false
+
           fieldList.add($fieldName)
 
           setter = newNimNode(nnkAccQuoted)
@@ -89,9 +98,19 @@ macro document*(head: expr, body: stmt): stmt {.immediate.} =
           newFieldName = ident(FIELD_PREFIX & capitalize($fieldName))
           n[0] = newFieldName
           recList.add(n)
+
+          if isArray:
+            setterGetterProcs.add quote do:
+              method `fieldName`*(self: `docName`): var `fieldType` =
+                if self.`newFieldName`.isNil:
+                  self.`newFieldName` = @[]
+                self.`newFieldName`
+          else:
+            setterGetterProcs.add quote do:
+              method `fieldName`*(self: `docName`): `fieldType` = self.`newFieldName`
+
           setterGetterProcs.add quote do:
-            method `fieldName`*(self: `docName`): `fieldType` = self.`newFieldName`
-            proc `setter`*(self: var `docName`, val: `fieldType`) =
+            proc `setter`*(self: `docName`, val: `fieldType`) =
               if not self.isDirty and self.`newFieldName` != val:
                 self.isDirty = true
               self.`newFieldName` = val
@@ -102,12 +121,12 @@ macro document*(head: expr, body: stmt): stmt {.immediate.} =
   result.insert(0,
     if baseName == nil:
       quote do:
-        type `docName` = object of RethinkDocument
+        type `docName` = ref object of RethinkDocument
     else:
       quote do:
-        type `docName` = object of `baseName`
+        type `docName` = ref object of `baseName`
   )
-  result[0][0][0][2][2] = recList
+  result[0][0][0][2][0][2] = recList
 
   var getDataProc =  quote do:
     proc getData*(self: `docName`): MutableDatum =
@@ -117,7 +136,6 @@ macro document*(head: expr, body: stmt): stmt {.immediate.} =
   var sym =  getDataProc[0][6][0][1][0][1][0]
 
   for f in fieldList:
-    #var e = newColonExpr(newStrLitNode(f), newDotExpr(sym, ident(FIELD_PREFIX & capitalize(f))))
     var e = newColonExpr(newStrLitNode(f), newDotExpr(sym, ident(f)))
     getDataProc[0][6][0][1].add(e)
 
@@ -129,7 +147,7 @@ macro document*(head: expr, body: stmt): stmt {.immediate.} =
 
       waitFor r.connect()
       echo(%doc.getData())
-      #discard waitFor r.table(name(`docName`)).insert([doc.getData()]).run(r)
+      discard waitFor r.table(name(`docName`)).insert([doc.getData()]).run(r)
   #echo getDataProc.treeRepr
   result.add(setterGetterProcs)
   result.add(getDataProc)

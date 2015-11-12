@@ -26,13 +26,17 @@ open()
 var
   soft: Software
   v: Version
-
+new(v)
+new(soft)
 
 v.version = "0.0.1"
 
 soft.id = "nginx"
 soft.name = "nginx"
-#soft.tags.add("linux")
-#soft.save()
+soft.lastCheckedAt = getLocalTime(getTime())
+soft.tags.add("linux")
+
+soft.save()
 
 #r.close()
+echo getLocalTime(getTime())
